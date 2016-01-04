@@ -16,4 +16,4 @@ Dejaremos esa puerta abierta para la versión 2
 Avences:
 
 Hasta hoy implementé el del protocolo ARP lo básico para que responda con la IP asignada a la placa, por lo que en una red ethernet contestará este tipo de mensaje.
-Cmo segundo paso implementé también el sercvicio ICMP para que conteste los paquetes eco, de esta manera al conecar el conjunto placa base-enc28j60 con un cable de red a una PC nos retornará el famoso PING.
+Como segundo paso implementé también el servicio ICMP para que conteste los paquetes eco, de esta manera al conectar el conjunto placa base-enc28j60 con un cable de red a una PC nos retornará el famoso PING.
