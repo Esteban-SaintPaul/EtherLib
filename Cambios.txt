@@ -1,0 +1,16 @@
+0.1 Se logró compilar la librería "lib" de dispositivos y "libeth" del driver
+	del circuito integrado I2C a Ethernet enc28j60 con la pila original
+0.2 Elimino los archivos que conforman la pila ip dejando libre el driver.
+0.3 Se implementa el eco para el protocolo ARP. Ahora responde a la petición 
+	de MAC.
+0.4 Implementa el protocolo ICMP, para enviar el paquete ICMP debe implementar
+	la confección de la cabecera IP, esto complica las cosas, ya que hay
+	que crear la cabecera Ethernet, luego la IP, luego la ICMP y calcular
+	para la IP su propio checksum (suma de verificación IP), además de
+	hacerlo para la cabecera y datos ICMP.
+	La implementación es muy detallada y costosa en cilcos reloj, el crear
+	la cabeceras campo a campo, copiar los datos, lleva un trabajo que
+	puede evitarse, copiando todo el paquete byte a byte, pero... no
+	aprenderíamos nada sobre la estructura de los encabezados. Todo
+	este trabajo tiene eso como objetivo, saber como y que es la pila TCP/IP
+	además de realizar algo funcional.

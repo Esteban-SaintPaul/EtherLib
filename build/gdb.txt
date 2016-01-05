@@ -1,0 +1,31 @@
+1. iniciar servidor
+	# st-util
+2. Iniciar el debugger
+	# arm-none-eabi-gdb
+3. Conectarnos al servidor
+	> target remote localhost:4242
+	> target remote :4242 // es mas corto
+4. Cargo el ejecutable
+	> file uno.elf
+5. Corro el prograba
+	> c
+6. Detengo en el instante
+	> Ctrl+C
+7. Salir
+	> q
+
+--------------------------------------
+4.1 Cargar puntos de verificación
+	> break 18 // se detendrá en la linea 18 del archivo uno.elf
+4.2 Ver un listado de lineas del archivo actual
+	> list
+4.2 Ver la linea 12 (cinco lineas antes y cinco despues)
+	> list 12
+4.4 Borrar todos los puntos de verificación
+	> clear
+	> delete
+4.5 Borrar un punto en particular
+	> delete 1
+4.6 Mostrar el valor de una variable
+	> print i
+
