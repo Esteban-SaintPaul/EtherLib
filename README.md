@@ -29,7 +29,6 @@ SPI1 MISO PA06 -> ENC28J60(SO)
 SPI1 MOSI PA07 -> ENC28J60(SI)
 SPI1 NSS  PA04 -> ENC28J60(CS)
 
-
  - Software
  
 Como sistema operativo utilizo Debian GNU/Linux 8. Dado que se me rompió el dísco rígido y no pude recuperar nada, instalé esta versión de cero, y la sorpersa mas grande es que el compilador, GNU para ARM GCC está disponible desde los repositorios como gcc-arm-none-eabi.
