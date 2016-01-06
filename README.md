@@ -17,3 +17,21 @@ Avences:
 
 Hasta hoy implementé el del protocolo ARP lo básico para que responda con la IP asignada a la placa, por lo que en una red ethernet contestará este tipo de mensaje.
 Como segundo paso implementé también el servicio ICMP para que conteste los paquetes eco, de esta manera al conectar el conjunto placa base-enc28j60 con un cable de red a una PC nos retornará el famoso PING.
+
+Inicio:
+
+ - Hardware
+Para iniciar debemos tener una placa stm32f4discovery, cable de conexión USB y placa enc28j60 (esta última la adquirí en Openhacks.)
+Para conectar la placa ST a la enc28j60 se deben cablear los siguientes pines:
+
+SPI1 SCK  PA05 -> ENC28J60(SCK)
+SPI1 MISO PA06 -> ENC28J60(SO)
+SPI1 MOSI PA07 -> ENC28J60(SI)
+SPI1 NSS  PA04 -> ENC28J60(CS)
+
+
+ - Software
+ 
+Como sistema operativo utilizo Debian GNU/Linux 8. Dado que se me rompió el dísco rígido y no pude recuperar nada, instalé esta versión de cero, y la sorpersa mas grande es que el compilador, GNU para ARM GCC está disponible desde los repositorios como gcc-arm-none-eabi.
+Tambien necesario es el software de Texane st-link, este se utiliza para grabar el preograma en nuestra placa ST y el st-util que es un servidor para realizar depuración desde el gdb-arm-none-eabi dese el puerto 4242.
+
