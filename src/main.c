@@ -6,6 +6,12 @@
 /* Definiciones locales */
 int init_portd(); /* Inicio los leds en el puerto "D" */
 
+uint32_t http(){
+
+        return(0);
+}
+
+
 /* Inicio */
 int main(void) {
 
@@ -17,6 +23,8 @@ int main(void) {
 	eth_set_mask(255,255,255,0);
 	eth_set_gw(10,0,0,1);
 	eth_init();
+
+	eth_set_puerto( http, 80 );
 
 //ERR_VAL no hay paquete
 //ERR_IF  hay paquete pero con error

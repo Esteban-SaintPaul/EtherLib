@@ -13,3 +13,4 @@ int eth_set_ip(uint8_t a, uint8_t b, uint8_t c, uint8_t d);
 int eth_set_gw(uint8_t a, uint8_t b, uint8_t c, uint8_t d);
 int eth_set_mask(uint8_t a, uint8_t b, uint8_t c, uint8_t d);
 int eth_set_mac(uint8_t a, uint8_t b, uint8_t c, uint8_t d, uint8_t e, uint8_t f);
+int eth_set_puerto(uint32_t (*a)() , uint16_t puerto);
