@@ -15,9 +15,11 @@ Dejaremos esa puerta abierta para la versión 2
 
 Avences:
 
+Esta es la versión 0.6
 Hasta hoy implementé el del protocolo ARP lo básico para que responda con la IP asignada a la placa, por lo que en una red ethernet contestará este tipo de mensaje.
 Como segundo paso implementé también el servicio ICMP para que conteste los paquetes eco, de esta manera al conectar el conjunto placa base-enc28j60 con un cable de red a una PC nos retornará el famoso PING.
-En esta versión 0.5 se 
+El sistema realiza la conexión en tres pasos llamada "three way handshake" deTCP
+Si intentamos ver cualquier página web, por ejemplo "http://10.0.0.31/index.html" nos retorna el error 404 de http! ¿Genial no?
 
 Inicio:
 
