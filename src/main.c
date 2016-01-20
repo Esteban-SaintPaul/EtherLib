@@ -6,9 +6,15 @@
 /* Definiciones locales */
 int init_portd(); /* Inicio los leds en el puerto "D" */
 
-uint32_t http(){
-
-        return(0);
+uint32_t http(eth_frame_t* eth_in){
+	uint8_t pagina_404[] = {"HTTP/1.1 404 NOT FOUND\r\nContent-Type: text/html\r\nContent-Length: 100\r\n\r\n<HTML><TITLE>PAGINA NO ENCONTRADA</TITLE><BODY><H1>ERROR 404 PAGINA NO ENCONTRADA</H1></BODY></HTML>"};
+//html 100
+//http 72
+//total 172
+	uint8_t *web_p;
+	web_p = pagina_404;
+	eth_write_socket( eth_in, web_p, 172 );
+   return(0);
 }
 
 
@@ -36,7 +42,7 @@ int main(void) {
 		i = eth_service();
 		if(i == ERR_OK ) GPIO_ToggleBits(GPIOD, GPIO_Pin_12);
 
-		for (i = 0; i < 1000; ++i){;}
+//		for (i = 0; i < 100; ++i){;}
 //		GPIO_ToggleBits(GPIOD, GPIO_Pin_13 | GPIO_Pin_14 | GPIO_Pin_15);
 	}
 }

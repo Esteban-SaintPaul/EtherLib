@@ -23,17 +23,16 @@
 #define ETH_CWR		0x80
 
 
-
-//#define inet_addr(a,b,c,d)      ( ((uint32_t)a) | ((uint32_t)b << 8) | ((uint32_t)c << 16) | ((uint32_t)d << 24) )
-
-//int eth_set_puerto(uint32_t (*a)() , uint16_t puerto);
-
+/*
+  Se pasa a definir en el archivo cabecera eth.h, esto es necesario para
+poder usarlo en la definición de "eth_write_socket(eth_frame_t* eth_in)"
 
 typedef struct __attribute__((__packed__)) eth_frame {
         uint8_t mac_dest[6];	// 00 11 11 22 22 33
         uint8_t mac_origen[6];	// 00 24 be 5b 41 84
         uint8_t tipo[2];	// 08 00 // protocolo IP // 08 06 ARP
 } eth_frame_t;
+*/
 
 typedef struct __attribute__((__packed__)) arp_frame {
         uint8_t hardware[2];	// 00 01 Ethernet
@@ -92,7 +91,7 @@ uint16_t icmp_checksum(ip_frame_t *ip);		// Calcula el checksum ICMP
 uint16_t ip_checksum(ip_frame_t *ip);		// Calcula el checksum IP
 uint16_t tcp_checksum(ip_frame_t *ip);		// calcula el checksum TCP
 int eth_comp(uint8_t* a, uint8_t* b, int n);	// compara arrays de char, retorna 0(iguales) menor a cero(si son distintos)
-int eth_retorno_paquete(eth_frame_t *eth_in, uint8_t tipo);//crea y envía paquetes (tipo ETH_SYN-ETH_ACK)
+int eth_retorno_paquete(eth_frame_t *eth_in, uint8_t tipo, uint8_t *datos, uint16_t cantidad);//crea y envía paquetes (tipo ETH_SYN-ETH_ACK)
 uint32_t u8_a_u32( uint8_t a,uint8_t b, uint8_t c, uint8_t d ); // convierte de 4 char a 1 palabra de 32 bits
 
 
@@ -102,7 +101,7 @@ uint8_t my_ip[]= {10,0,0,31};
 uint8_t my_mask[]= {255,255,255,0};
 uint8_t my_gw[]= {10,0,0,1};
 
-uint32_t (*eth_puerto[MAX_PUERTOS])();	//listado de punteros a servicios por puerto
+uint32_t (*eth_puerto[MAX_PUERTOS])(eth_frame_t *eth_in);	//listado de punteros a servicios por puerto
 
 uint32_t eth_tcp_estado[MAX_PUERTOS];	// estado de la conexión tcp
 #define ETH_ESPERANDO_SYN	1
@@ -178,10 +177,10 @@ uint16_t tcp_checksum(ip_frame_t *ip){
 }
 
 
-int eth_retorno_paquete(eth_frame_t *eth_in, uint8_t tipo){
+int eth_retorno_paquete(eth_frame_t *eth_in, uint8_t tipo, uint8_t *buffer, uint16_t cantidad){
 	uint32_t aux_u32;
 	uint16_t aux_u16;
-//	uint16_t i;
+	uint16_t i;
 	uint8_t aux_u8;
 	uint32_t secuencia;
 
@@ -195,8 +194,9 @@ int eth_retorno_paquete(eth_frame_t *eth_in, uint8_t tipo){
 
 	uint16_t largo_de_paquete;
 //	uint8_t *datos_in
-//	uint8_t *datos_out;
-	uint16_t max_datos;
+	uint8_t *datos_out;
+//	uint16_t max_datos;
+	uint16_t size_datos_in;
 
 	// a partir del frame ethernet apunto al paquete IP
 	aux_u32 = (uint32_t) eth_in;
@@ -212,6 +212,16 @@ int eth_retorno_paquete(eth_frame_t *eth_in, uint8_t tipo){
 	aux_u32 = (uint32_t) ip_in;
 	aux_u32 += (uint32_t) aux_u8;
 	tcp_in = (tcp_frame_t*) aux_u32;
+
+	// calculo el largo de los datos de entrada
+	aux_u16 = (uint16_t) ip_in->longitud[0];// invierto los bytes
+	aux_u16 = aux_u16 << 8;
+	aux_u16 += (uint16_t) ip_in->longitud[1];
+	aux_u16 -= (uint16_t) aux_u8;		// le resto la cabecera IP
+	aux_u8 = tcp_in->tam_RES_NONCE >> 4;	//tomo los 4 bits mas altos, son el tamaño de la cabecera tcp
+	aux_u8 *= 4;				// lo paso a palabras de 8 bits
+	aux_u16 -= (uint16_t) aux_u8;		// le resto la cabecera TCP
+	size_datos_in = aux_u16;
 
 	// Creo el paquete de retorno
 	// Dierecciono cabecera Ethernet
@@ -244,6 +254,21 @@ int eth_retorno_paquete(eth_frame_t *eth_in, uint8_t tipo){
 	if(tipo == (ETH_SYN | ETH_ACK)){
 		ip_out->longitud[0] = 0x00;	// retoro el mismo paquete con igual longitud
 		ip_out->longitud[1] = 40;	// 20 bytes ip + 20 bytes TCP
+	}
+	if(tipo == ETH_ACK){
+		ip_out->longitud[0] = 0x00;	// retoro el mismo paquete con igual longitud
+		ip_out->longitud[1] = 40;	// 20 bytes ip + 20 bytes TCP
+	}
+	if(tipo == ( ETH_FIN | ETH_ACK ) ){
+		ip_out->longitud[0] = 0x00;	// retoro el mismo paquete con igual longitud
+		ip_out->longitud[1] = 40;	// 20 bytes ip + 20 bytes TCP
+	}
+	if(tipo == ( ETH_PUSH | ETH_ACK ) ){
+		aux_u16 = 40;		//largo de la cabecera ip + cabecera tcp
+		aux_u16 += cantidad;	//le sumo los datos
+		ip_out->longitud[1] = (uint8_t) ( aux_u16 & 0x00FF );	// retoro el mismo paquete con igual longitud
+		aux_u16 >>= 8;
+		ip_out->longitud[0] = (uint8_t) ( aux_u16 & 0x00FF );	// datos a enviar
 	}
 	ip_out->identificacion[0] = 0x00;		// identifica como paquete único
 	ip_out->identificacion[1] = ip_in->identificacion[1] + 10;
@@ -280,6 +305,22 @@ int eth_retorno_paquete(eth_frame_t *eth_in, uint8_t tipo){
 		aux_u32++;	// Le sumo 1 a secuencia
 		secuencia = 22;	// asigno un número inicial para la secuencia mia
 	}
+	if(tipo == ETH_ACK){
+		aux_u32 = u8_a_u32(tcp_in->secuencia[0], tcp_in->secuencia[1], tcp_in->secuencia[2], tcp_in->secuencia[3] ); // Cambio el número de 4 byites a palabra de 32
+//		aux_u32 += size_datos_in;	// valido que recibí los datos enviados
+		aux_u32++;
+		secuencia = u8_a_u32(tcp_in->acknew[0], tcp_in->acknew[1], tcp_in->acknew[2], tcp_in->acknew[3]);
+	}
+	if(tipo == (ETH_FIN | ETH_ACK) ){
+		aux_u32 = u8_a_u32(tcp_in->secuencia[0], tcp_in->secuencia[1], tcp_in->secuencia[2], tcp_in->secuencia[3] ); // Cambio el número de 4 byites a palabra de 32
+		aux_u32 += size_datos_in;	// valido que recibí los datos enviados
+		secuencia = u8_a_u32(tcp_in->acknew[0], tcp_in->acknew[1], tcp_in->acknew[2], tcp_in->acknew[3]);
+	}
+	if(tipo == (ETH_PUSH | ETH_ACK) ){
+		aux_u32 = u8_a_u32(tcp_in->secuencia[0], tcp_in->secuencia[1], tcp_in->secuencia[2], tcp_in->secuencia[3] ); // Cambio el número de 4 byites a palabra de 32
+		aux_u32 += size_datos_in;	// valido que recibí los datos enviados
+		secuencia = u8_a_u32(tcp_in->acknew[0], tcp_in->acknew[1], tcp_in->acknew[2], tcp_in->acknew[3]);
+	}
 	tcp_out->acknew[3] = aux_u32 & 0x000000ff;	// invierto el número y lo asigno de a 8 bits
 	tcp_out->acknew[2] = (aux_u32 >> 8) & 0x000000ff;
 	tcp_out->acknew[1] = (aux_u32 >> 16) & 0x000000ff;
@@ -305,23 +346,28 @@ int eth_retorno_paquete(eth_frame_t *eth_in, uint8_t tipo){
 	aux_u16 += (uint16_t) ip_out->longitud[1];
 	aux_u16 -= sizeof(ip_frame_t);		// le resto la cabecera IP
 	aux_u16 -= sizeof(tcp_frame_t);		// le resto la cabecera TCP
-	max_datos = aux_u16;
+//	max_datos = aux_u16;
 
 	// apunto a los datos de salida
-//	aux_u32 = (uint32_t) tcp_out;
-//	aux_u32 += sizeof(tcp_frame_t);
-//	datos_out = (uint8_t*) aux_u32;
+	aux_u32 = (uint32_t) tcp_out;
+	aux_u32 += sizeof(tcp_frame_t);
+	datos_out = (uint8_t*) aux_u32;
 /*
 	// apunto a los datos de entada
 	aux_u32 = (uint32_t) icmp_in;
 	aux_u32 += sizeof(icmp_frame_t);
 	datos_in = (uint8_t*) aux_u32;
-
-	for(i=0 ; i < max_datos ; i++){	//copio los datos
-		datos_out[i] = datos_in[i];
-	}
 */
-	largo_de_paquete = 14 /*ETH*/+ 20 /*IP*/ + 20 /*TCP*/+ max_datos /*datos*/;
+	if( tipo == ( ETH_PUSH | ETH_ACK ) ){
+		for( i=0 ; i < cantidad ; i++){	//copio los datos
+			datos_out[i] = buffer[i];
+		}
+	} else {
+		cantidad = 0;
+	}
+
+	largo_de_paquete = 14 /*ETH*/+ 20 /*IP*/ + 20 /*TCP*/+ cantidad /*datos*/;
+
 	aux_u16 = tcp_checksum(ip_out);
 	tcp_out->checksum[1] = (uint8_t) aux_u16 & 0xff;
 	aux_u16 = aux_u16 >> 8;
@@ -354,6 +400,7 @@ int eth_retorno_paquete(eth_frame_t *eth_in, uint8_t tipo){
 }
 
 int eth_tcp_frame(eth_frame_t *eth_in){
+
 	uint32_t aux_u32;
 //	uint16_t aux_u16;
 	uint8_t aux_u8;
@@ -389,22 +436,30 @@ int eth_tcp_frame(eth_frame_t *eth_in){
 	switch (tcp_in->flag){
 	case ETH_SYN:
 		if(eth_tcp_estado[puerto] == ETH_ESPERANDO_SYN){
-			eth_retorno_paquete(eth_in, ETH_SYN | ETH_ACK );//retorno syn-ack
-			eth_tcp_estado[puerto] = ETH_ESPERANDO_ACK;
-		}
+//			eth_tcp_estado[puerto] = ETH_ESPERANDO_ACK;
+			eth_tcp_estado[puerto] = ETH_CONECTADO;
+			eth_retorno_paquete(eth_in, ( ETH_SYN | ETH_ACK ), 0, 0 );//retorno syn-ack
+		} //else RST
 		break;
 	case ETH_ACK:
 		if(eth_tcp_estado[puerto] == ETH_ESPERANDO_ACK){
 			eth_tcp_estado[puerto] = ETH_CONECTADO;
+		} else{// else RST
+			eth_tcp_estado[puerto] = ETH_ESPERANDO_SYN;
 		}
 		break;
 	case ETH_FIN:
 		break;
 	case ETH_RST:
 		break;
-	case ETH_PUSH:
-//prueba de asignación de puntero a función
-//		eth_puerto[aux_u16]();		// ejecuto el servicio
+	case ( ETH_PUSH | ETH_ACK ):
+		eth_puerto[puerto](eth_in);		// ejecuto el servicio
+		eth_tcp_estado[puerto] = ETH_ESPERANDO_SYN;// hago esto para que vuelva a conectar , hay que arreglarlo
+		break;
+//--------------------------------------------------------------------
+	case ( ETH_FIN | ETH_ACK ):
+		eth_retorno_paquete(eth_in, ETH_ACK , 0, 0);//retorno fin-ack
+		eth_tcp_estado[puerto] = ETH_ESPERANDO_SYN;// hago esto para que vuelva a conectar , hay que arreglarlo
 		break;
 	}
 
@@ -800,7 +855,7 @@ int eth_comp(uint8_t* a, uint8_t* b, int n){
 	return(0);
 }
 
-int eth_set_puerto(uint32_t (*a)() , uint16_t puerto){
+int eth_set_puerto(uint32_t (*a)(eth_frame_t*) , uint16_t puerto){
 	eth_puerto[puerto] = a;		// asigno función a puerto
 	eth_tcp_estado[puerto] = ETH_ESPERANDO_SYN;// cambio a estado esperando SYN
 	return(0);
@@ -906,16 +961,18 @@ int eth_open_socket(){
 }
 
 int eth_close_socket(){
-
+//	eth_tcp_estado[puerto] = ETH_ESPERANDO_SYN;	//cierro la conexión pero no el puero, quedo esperando un paquete SYN
 	return(0);
 }
 
 int eth_read_socket(){
-
+// debería leer los datos enviados con esto ¿no?
 	return(0);
 }
 
-int eth_write_socket(){
+int eth_write_socket(eth_frame_t *eth, uint8_t *datos, uint16_t cantidad){
+
+	eth_retorno_paquete(eth, ( ETH_PUSH | ETH_ACK ), datos, cantidad );//retorno syn-ack
 
 	return(0);
 }
