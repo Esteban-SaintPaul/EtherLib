@@ -5,21 +5,11 @@
 
 /* Definiciones locales */
 int init_portd(); /* Inicio los leds en el puerto "D" */
-
-uint32_t http(eth_frame_t* eth_in){
-	uint8_t pagina_404[] = {"HTTP/1.1 404 NOT FOUND\r\nContent-Type: text/html\r\nContent-Length: 100\r\n\r\n<HTML><TITLE>PAGINA NO ENCONTRADA</TITLE><BODY><H1>ERROR 404 PAGINA NO ENCONTRADA</H1></BODY></HTML>"};
-//html 100
-//http 72
-//total 172
-	uint8_t *web_p;
-	web_p = pagina_404;
-	eth_write_socket( eth_in, web_p, 172 );
-   return(0);
-}
-
+uint32_t http(eth_frame_t* eth_in); //servidor web
 
 /* Inicio */
 int main(void) {
+	uint32_t i;
 
 	init_portd();
 
@@ -29,7 +19,6 @@ int main(void) {
 	eth_set_mask(255,255,255,0);
 	eth_set_gw(10,0,0,1);
 	eth_init();
-
 	eth_set_puerto( http, 80 );
 
 //ERR_VAL no hay paquete
@@ -37,16 +26,34 @@ int main(void) {
 //ERR_OK  hay paquete sin errores
 
 	while (1) {
-		int i;
 
-		i = eth_service();
-		if(i == ERR_OK ) GPIO_ToggleBits(GPIOD, GPIO_Pin_12);
+		eth_service();
 
-//		for (i = 0; i < 100; ++i){;}
-//		GPIO_ToggleBits(GPIOD, GPIO_Pin_13 | GPIO_Pin_14 | GPIO_Pin_15);
+//		if(i == ERR_OK ) GPIO_ToggleBits(GPIOD, GPIO_Pin_12);
+		for (i = 0; i < 1000; ++i){;}
+		GPIO_ToggleBits(GPIOD, GPIO_Pin_13 | GPIO_Pin_14 | GPIO_Pin_15);
 	}
 }
 
+
+uint32_t http(eth_frame_t* eth_in){
+	uint8_t buffer[1500];
+	uint32_t size_dat;
+
+	// tamaños: html=100, http=72, total=172
+	uint8_t pagina_404[] = {"HTTP/1.1 404 NOT FOUND\r\nContent-Type: text/html\r\nContent-Length: 100\r\n\r\n<HTML><TITLE>PAGINA NO ENCONTRADA</TITLE><BODY><H1>ERROR 404 PAGINA NO ENCONTRADA</H1></BODY></HTML>"};
+
+	// tamaños: html=100, http=65, total=165
+	uint8_t pagina_index[] = {"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 100\r\n\r\n<HTML><TITLE>PAGINA ENCONTRADA   </TITLE><BODY><H1>STM32F4DISCOVERY LIBETH 0.7   </H1></BODY></HTML>"};
+
+	eth_read_socket( eth_in, buffer, &size_dat);	// Leo la petición entrante
+	if(buffer[0] == 'G'){
+		eth_write_socket( eth_in, pagina_index, 165 );	// Envío la web 404
+	} else {
+		eth_write_socket( eth_in, pagina_404, 172 );	// Envío la web 404
+	}
+   return(0);
+}
 
 /* Función para iniciar el puerto "D" , esencialmente los Leds de la placa */
 int init_portd(){
