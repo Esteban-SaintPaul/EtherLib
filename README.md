@@ -15,11 +15,14 @@ Dejaremos esa puerta abierta para la versión 2
 
 Avences:
 
-Esta es la versión 0.7
+Esta es la versión 1.0
 Hasta hoy implementé el del protocolo ARP lo básico para que responda con la IP asignada a la placa, por lo que en una red ethernet contestará este tipo de mensaje.
 Como segundo paso implementé también el servicio ICMP para que conteste los paquetes eco, de esta manera al conectar el conjunto placa base-enc28j60 con un cable de red a una PC nos retornará el famoso PING.
-El sistema realiza la conexión en tres pasos llamada "three way handshake" deTCP
-Si intentamos ver cualquier página web, por ejemplo "http://10.0.0.31/index.html" nos retorna el error 404 de http! ¿Genial no?
+El sistema realiza la conexión en tres pasos llamada "three way handshake" de TCP y envía solicitudes GET.
+Si intentamos ver la página web "http://10.0.0.31/index.html" nos retorna una página sencilla, cualquier otra url nos traerá el error 404.
+Pruebo tambien el uso de otro puerto iniciando un servidor web wn el 517,porlo que colocando http://10.0.0.31:517/nfs nos traerá otra página web o error 404.
+con esto son permitirá crar por ejemplo un servido ftp sin interferir con el web.
+
 
 Inicio:
 
