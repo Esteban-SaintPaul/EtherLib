@@ -95,6 +95,9 @@ int eth_retorno_paquete(eth_frame_t *eth_in, uint8_t tipo, uint8_t *datos, uint1
 uint32_t u8_a_u32( uint8_t a,uint8_t b, uint8_t c, uint8_t d ); // convierte de 4 char a 1 palabra de 32 bits
 int eth_read_paquete(eth_frame_t *eth, uint8_t *datos, uint16_t *cantidad);
 
+uint16_t tcp_checksum_data(uint8_t *data_p, uint32_t size_dat);	// calcula checksum de datos (tcp)
+uint16_t tcp_checksum_header(ip_frame_t *ip, uint16_t size_dat); //calcula el chacksum de las cabeceras TCP
+
 
 uint8_t my_mac[]= {0x00,0x11,0x22,0x33,0x44,0x55};
 uint8_t broadcast_mac[]= {0xff,0xff,0xff,0xff,0xff,0xff};
@@ -108,6 +111,359 @@ uint32_t eth_tcp_estado[MAX_PUERTOS];	// estado de la conexión tcp
 #define ETH_ESPERANDO_SYN	1
 #define ETH_ESPERANDO_ACK	2
 #define ETH_CONECTADO		3
+
+//#define ETH_SIZE_FRAG	1024
+#define ETH_SIZE_FRAG	80	// siempre en múltiplos de 8, tamaño del fragmento
+uint16_t eth_identificacion = 3;	// identifica cada paquete o grupo de fregmentos
+
+int eth_retorno_fragmento(eth_frame_t *eth_in, uint8_t *buffer, uint16_t size_arch, uint16_t frag, uint16_t cant_frag);
+
+uint16_t tcp_checksum_data(uint8_t *data_p, uint32_t size_dat){
+	// *data_p  : Apuntador a los datos
+	// size_dat : Tamaño de los datos en palabras de 8 bits
+	uint32_t aux_u32;	// variable auxiliar
+	uint32_t i;		// contador
+	uint32_t acu;		// acumulador
+
+	for( i = 0, acu = 0; i < size_dat  ; i++ ){	// recorro todos los datos
+		acu += (uint32_t) data_p[i] << 8;	// coloco dato en parte alta
+		i++;					// apunto al siguiente dato
+		if(i < size_dat){
+			acu += (uint32_t) data_p[i];	// coloco dato en parte baja
+		} else { i--; }
+		while(acu > 0x0000ffff ){		// es mayor a 16 bits
+			aux_u32 = acu >> 16;		// tomo el excedente
+			acu &= 0x0000ffff;		// borro el excedente del acumulado
+			acu += aux_u32;			// sumo el excedente al acumulado
+		}
+	}
+	acu &= 0x0000ffff;				//
+	return( (uint16_t) acu );			// retorno acumulado acotado a 16 bits
+}
+
+uint16_t tcp_checksum_header(ip_frame_t *ip, uint16_t size_dat){
+	uint32_t aux_u32;
+	uint32_t i;
+	uint32_t acu;		// acumulador
+	uint16_t size_hip;	// tamaño de cabecera ip
+	uint16_t size_ip;	// tamaño del frame ip (ip = hip + htcp + dat)
+	uint16_t size_htcp;	// tamaño de cabecera tcp
+//	uint16_t size_dat;	// tamaño de datos
+	tcp_frame_t *tcp;
+	uint8_t *puntero;
+
+	//Obtengo la longitud de cabecera IP
+	size_hip = (uint16_t) ip->ver_hlen;	// los 4 bits mas bajos son la longitud en palabras de 32 bits
+	size_hip &= 0x000f;
+	size_hip *= 4;		// lo paso a palabras de 8 bits (bytes)
+
+	// apunto al paquete TCP
+	aux_u32 = (uint32_t) ip;		// me paro el el comienzo del frame ip
+	aux_u32 += (uint32_t) size_hip;		// me corro hasta finalizar la cabecera ip
+	tcp = (tcp_frame_t*) aux_u32;	// guardo esto como el inicio de la cabecera tcp
+	puntero = (uint8_t*) aux_u32;	// tambien me guardo un puntero al inicio de la cabecera tcp
+
+	// obtengo tamaño de cabecera tcp
+	size_htcp = (uint16_t) tcp->tam_RES_NONCE >> 4;
+	size_htcp *= 4;
+
+	// obtengo el largo del frame ip
+	size_ip = (uint16_t) ip->longitud[0];// invierto los bytes
+	size_ip <<= 8;
+	size_ip += (uint16_t) ip->longitud[1];
+
+	// calculo la cantidad de datos
+//	size_dat = size_ip - size_hip - size_htcp;
+
+	//----------------------------------------------------
+	// Seudo cabecera TCP
+	acu = (uint32_t) ip->ip_origen[0] << 8;
+	acu += (uint32_t) ip->ip_origen[1];
+	acu += (uint32_t) ip->ip_origen[2] << 8;
+	acu += (uint32_t) ip->ip_origen[3];
+
+	acu += (uint32_t) ip->ip_dest[0] << 8;
+	acu += (uint32_t) ip->ip_dest[1];
+	acu += (uint32_t) ip->ip_dest[2] << 8;
+	acu += (uint32_t) ip->ip_dest[3];
+
+	acu += (uint32_t) ip->protocolo;	//TCP 0x06, UDP 0x11
+
+	acu += (uint32_t) size_htcp + size_dat;
+	//----------------------------------------------------
+	// suma la cabecera
+	for( i = 0; i < size_htcp  ; i++ ){
+		acu += (uint32_t) puntero[i] << 8;
+		i++;
+		if(i < size_htcp){
+			acu += (uint32_t) puntero[i];
+		} else { i--; }
+		while(acu > 0x0000ffff ){
+			aux_u32 = acu >> 16;
+			acu &= 0x0000ffff;
+			acu += aux_u32;
+		}
+	}
+	acu &= 0x0000ffff;
+	return( (uint16_t) acu );
+}
+
+
+
+
+int eth_write_socket(eth_frame_t *eth, uint8_t *datos, uint32_t cantidad){
+
+	uint16_t aux_u16;
+	uint16_t num_frag;
+	uint16_t cant_frag;
+
+	aux_u16 = (uint16_t) cantidad;
+
+	if( cantidad < ETH_SIZE_FRAG ){	// no maneja fragmentación 
+		eth_retorno_paquete(eth, ( ETH_PUSH | ETH_ACK ), datos, aux_u16 );//retorno syn-ack
+	} else {
+		// ejemplo de como retornarlo fragmentado
+		eth_identificacion++;
+
+		cant_frag = (uint16_t) cantidad / ETH_SIZE_FRAG;
+		if( 0 != (cant_frag % ETH_SIZE_FRAG ) )cant_frag++;
+
+		for(num_frag=0; num_frag < cant_frag; num_frag++){
+			eth_retorno_fragmento(eth , datos, aux_u16, num_frag, cant_frag); // retorna un fragmento ip
+		}
+
+//		eth_retorno_fragmento(eth , datos, aux_u16, 1, 2); // retorna un fragmento ip
+	}
+	return(0);
+}
+
+
+int eth_retorno_fragmento(eth_frame_t *eth_in, uint8_t *buffer, uint16_t size_arch, uint16_t frag, uint16_t cant_frag){
+	uint32_t aux_u32;
+	uint32_t checksum;
+	uint16_t aux_u16;
+	uint16_t i;
+	uint8_t aux_u8;
+	uint32_t secuencia;
+	uint8_t tipo;
+	uint8_t *datos_p;
+	uint32_t datos_c;
+
+	ip_frame_t *ip_in;
+	tcp_frame_t *tcp_in;
+	pbuf_t buffer_out;
+
+	eth_frame_t *eth_out;
+	ip_frame_t *ip_out;
+	tcp_frame_t *tcp_out;
+
+	uint16_t largo_de_paquete;
+//	uint8_t *datos_in
+	uint8_t *datos_out;
+//	uint16_t max_datos;
+	uint16_t size_datos_in;
+
+	// fijo el tipo de paquete
+	tipo = ( ETH_PUSH | ETH_ACK );
+
+	// a partir del frame ethernet apunto al paquete IP
+	aux_u32 = (uint32_t) eth_in;
+	aux_u32 += sizeof(eth_frame_t);
+	ip_in = (ip_frame_t*) aux_u32;
+
+	//Obtengo la longitud de cabecera IP
+	aux_u8 = ip_in->ver_hlen;	// los 4 bits mas bajos son la longitud en palabras de 32 bits
+	aux_u8 = aux_u8 & 0x0f;
+	aux_u8 = aux_u8 * 4;		// lo paso a palabras de 8 bits (bytes)
+
+	// apunto al paquete TCP
+	aux_u32 = (uint32_t) ip_in;
+	aux_u32 += (uint32_t) aux_u8;
+	tcp_in = (tcp_frame_t*) aux_u32;
+
+	// calculo el largo de los datos de entrada
+	aux_u16 = (uint16_t) ip_in->longitud[0];// invierto los bytes
+	aux_u16 = aux_u16 << 8;
+	aux_u16 += (uint16_t) ip_in->longitud[1];
+	aux_u16 -= (uint16_t) aux_u8;		// le resto la cabecera IP
+	aux_u8 = tcp_in->tam_RES_NONCE >> 4;	//tomo los 4 bits mas altos, son el tamaño de la cabecera tcp
+	aux_u8 *= 4;				// lo paso a palabras de 8 bits
+	aux_u16 -= (uint16_t) aux_u8;		// le resto la cabecera TCP
+	size_datos_in = aux_u16;
+
+	// Creo el paquete de retorno
+	// Dierecciono cabecera Ethernet
+	eth_out = (eth_frame_t*) buffer_out.payload;
+
+	eth_out->mac_dest[0] = eth_in->mac_origen[0];	//retorno al remitente
+	eth_out->mac_dest[1] = eth_in->mac_origen[1];
+	eth_out->mac_dest[2] = eth_in->mac_origen[2];
+	eth_out->mac_dest[3] = eth_in->mac_origen[3];
+	eth_out->mac_dest[4] = eth_in->mac_origen[4];
+	eth_out->mac_dest[5] = eth_in->mac_origen[5];
+
+	eth_out->mac_origen[0] = my_mac[0];	// me coloco como remitente
+	eth_out->mac_origen[1] = my_mac[1];
+	eth_out->mac_origen[2] = my_mac[2];
+	eth_out->mac_origen[3] = my_mac[3];
+	eth_out->mac_origen[4] = my_mac[4];
+	eth_out->mac_origen[5] = my_mac[5];
+
+	eth_out->tipo[0] = 0x08;		// paquete IP (ICMP, ETHERNET)
+	eth_out->tipo[1] = 0x00;
+
+	// Completo cabecera IP
+	aux_u32 = (uint32_t) eth_out;		// apunto a la cahecera IP
+	aux_u32 += sizeof(eth_frame_t);
+ 	ip_out = (ip_frame_t*) aux_u32;
+
+	ip_out->ver_hlen = 0x45;			// Versión 4, cabecera con 5 palabras de 32 bits (20 bytes)
+	ip_out->tipo_servicio = 00;			// No se por que se coloca 00
+/*
+	if(frag == 0){ aux_u16 = 40;}		//largo de la cabecera ip + cabecera tcp
+	else {aux_u16 = 20;}		//solo la ip para el resto de los fregmentos
+*/
+	aux_u16 = 20;		//largo de la cabecera IP
+	if(frag != ( cant_frag -1 ) ){
+		aux_u16 += ETH_SIZE_FRAG;	// si no es el último fragmento manda 1024
+	} else {
+		aux_u16 += 20 + size_arch - ( ETH_SIZE_FRAG * frag ); // el tamaño total menos todos los fragmentos enviados
+	}
+	ip_out->longitud[1] = (uint8_t) ( aux_u16 & 0x00FF );
+	aux_u16 >>= 8;
+	ip_out->longitud[0] = (uint8_t) ( aux_u16 & 0x00FF );
+
+	aux_u16 = eth_identificacion;
+	ip_out->identificacion[1] = (uint8_t) ( aux_u16 & 0x00FF );		// identifica como paquete único
+	aux_u16 >>= 8;
+	ip_out->identificacion[0] = (uint8_t) ( aux_u16 & 0x00FF );		// identifica como paquete único
+
+	if( frag != (cant_frag - 1) ){ //no es el último, es fragmentado
+		aux_u16 = 0x2000; 	// 001----- -------- flag de fragmentado
+	} else { //es el último fragmento
+//		aux_u16 = 0x4000; 	// 010----- -------- flag de fragmentado
+		aux_u16 = 0x0000; 	// 000----- -------- flag de fragmentado
+	}
+	aux_u16 = aux_u16 + ( ((ETH_SIZE_FRAG * frag) )/ 8 );	// ---xxxxx xxxxxxxx número de fragmento (en palabras de 64 bits)
+
+	ip_out->band_desplazamiento[0] = (uint8_t) (( aux_u16 >> 8 ) & 0x00ff);
+	ip_out->band_desplazamiento[1] = (uint8_t) ( aux_u16 & 0x00ff );
+
+	ip_out->tiempo_vida = 0x40;		// tiempo que viajará por la red
+	ip_out->protocolo = 0x06;		// 01 ICMP, 06 tcp
+	ip_out->suma_verif[0] = 0x00;		// para calcular se ponen a cero
+	ip_out->suma_verif[1] = 0x00;
+	ip_out->ip_origen[0] = my_ip[0];	// Yo soy el origen
+	ip_out->ip_origen[1] = my_ip[1];
+	ip_out->ip_origen[2] = my_ip[2];
+	ip_out->ip_origen[3] = my_ip[3];
+	ip_out->ip_dest[0] = ip_in->ip_origen[0]; // retorno eco al remitente
+	ip_out->ip_dest[1] = ip_in->ip_origen[1];
+	ip_out->ip_dest[2] = ip_in->ip_origen[2];
+	ip_out->ip_dest[3] = ip_in->ip_origen[3];
+
+	aux_u16 = ip_checksum(ip_out);		// calculo el checksum de la cabecera IP
+	ip_out->suma_verif[1] = (uint8_t) aux_u16 & 0xff;
+	aux_u16 = aux_u16 >> 8;
+	ip_out->suma_verif[0] = (uint8_t) aux_u16 & 0xff;
+
+if(frag == 0){
+	// Completo paquete tcp
+	aux_u32 = (uint32_t) ip_out;
+	aux_u32 += 20;			// desplazamiento hasta el final de la cabecera IP
+	tcp_out = (tcp_frame_t*) aux_u32;
+	tcp_out->puerto_origen[0] = tcp_in->puerto_dest[0];	//puerto origen
+	tcp_out->puerto_origen[1] = tcp_in->puerto_dest[1];
+	tcp_out->puerto_dest[0] = tcp_in->puerto_origen[0];	//puerto destino
+	tcp_out->puerto_dest[1] = tcp_in->puerto_origen[1];	//puerto destino
+	aux_u32 = u8_a_u32(tcp_in->secuencia[0], tcp_in->secuencia[1], tcp_in->secuencia[2], tcp_in->secuencia[3] ); // Cambio el número de 4 byites a palabra de 32
+
+	aux_u32 = u8_a_u32(tcp_in->secuencia[0], tcp_in->secuencia[1], tcp_in->secuencia[2], tcp_in->secuencia[3] ); // Cambio el número de 4 byites a palabra de 32
+	aux_u32 += size_datos_in;	// valido que recibí los datos enviados
+	secuencia = u8_a_u32(tcp_in->acknew[0], tcp_in->acknew[1], tcp_in->acknew[2], tcp_in->acknew[3]);
+
+	tcp_out->acknew[3] = aux_u32 & 0x000000ff;	// invierto el número y lo asigno de a 8 bits
+	tcp_out->acknew[2] = (aux_u32 >> 8) & 0x000000ff;
+	tcp_out->acknew[1] = (aux_u32 >> 16) & 0x000000ff;
+	tcp_out->acknew[0] = (aux_u32 >> 24) & 0x000000ff;
+	tcp_out->secuencia[3] = secuencia & 0x000000ff;	// invierto el número y lo asigno de a 8 bits
+	tcp_out->secuencia[2] = (secuencia >> 8) & 0x000000ff;
+	tcp_out->secuencia[1] = (secuencia >> 16) & 0x000000ff;
+	tcp_out->secuencia[0] = (secuencia >> 24) & 0x000000ff;
+	tcp_out->tam_RES_NONCE = 0x50;	// 5 bytes
+	tcp_out->flag = tipo ;	// Tipo de paquete (flag syn, ack etc.)
+	tcp_out->ventana[1] = 0x72;	// un valor fijo, por ahora
+	tcp_out->ventana[0] = 0x10;
+	tcp_out->checksum[0] = 0x00;
+	tcp_out->checksum[1] = 0x00;
+	tcp_out->punt_urg[0] = 0x00;	// no usa puntero urgente
+	tcp_out->punt_urg[1] = 0x00;
+
+	// Me paro al comienzo de los datos
+	aux_u32 = (uint32_t) tcp_out;
+	aux_u32 += sizeof(tcp_frame_t);
+	datos_out = (uint8_t*) aux_u32;
+
+} else {
+	aux_u32 = (uint32_t) ip_out;	// los siguientes fragmentos no tienen encabezado TCP
+	aux_u32 += sizeof(ip_frame_t);
+	datos_out = (uint8_t*) aux_u32;
+}
+
+
+	aux_u32 = (uint32_t) buffer;	// Me paro en el buffer
+	aux_u32 += (uint32_t) ( frag * ETH_SIZE_FRAG ); // me corro hasta los datos a enviar
+	if(frag != 0) aux_u32 -= 20;	// corro el tamaño de la cabecera TCP 
+	datos_p = (uint8_t*) aux_u32;	// Lo asigno a un puntero
+
+	if( frag != ( cant_frag -1 ) ){	// Si no es el último fragmento envío 1024 bytes
+		if( frag == 0 ){	// si es el primero, tiene cabecera TCP por lo que envío 20 bytes menos de datos
+			datos_c = ETH_SIZE_FRAG - 20;
+		} else {
+			datos_c = ETH_SIZE_FRAG;
+		}
+	} else {			// Si es el último sumo la cabecera TCP + datos y le resto todos los fragmentos enviados
+		datos_c = (uint32_t) ( 20 + size_arch - ( frag * ETH_SIZE_FRAG) );
+	}
+
+	for( i=0 ; i < datos_c ; i++){	//copio los datos
+			datos_out[i] = datos_p[i];
+	}
+
+	// calculo el largo del paquete Ethernet
+	largo_de_paquete = 0;
+	if(frag == 0){	// Solo el primer paquete tiene el encabezado TCP
+		largo_de_paquete = sizeof(tcp_frame_t);/*TCP*/
+	}
+	largo_de_paquete += datos_c;	// Agregamos los datos
+
+	largo_de_paquete += 14 /*ETH*/+ 20 /*IP*/;// los demás encabezados
+
+//-----------------------------------------------------------------------
+// Hay que solucionar el problema del checksum
+	if(frag == 0){
+		//aux_u16 = tcp_checksum(ip_out);
+		checksum = tcp_checksum_header(ip_out, size_arch) + tcp_checksum_data(buffer, size_arch);
+		while(checksum > 0x0000ffff){
+			aux_u32 = checksum >> 16;
+			checksum &= 0x0000ffff;
+			checksum += aux_u32;
+		}
+		checksum = ~checksum;	//invierto los bits
+		checksum &= 0x0000ffff;	//lo limito a 16 bits
+		tcp_out->checksum[1] = (uint8_t) checksum & 0xff;
+		checksum = checksum >> 8;
+		tcp_out->checksum[0] = (uint8_t) checksum & 0xff;
+	}
+
+//-----------------------------------------------------------------------
+	// lo envío
+	buffer_out.length = largo_de_paquete;
+	drvEnc28j60_packetSend(&buffer_out);	// envío respuesta
+
+	return(0);
+}
+
 
 int eth_read_socket(eth_frame_t *eth, uint8_t *datos, uint32_t *cantidad){
 	uint16_t cant;
@@ -1035,14 +1391,3 @@ int eth_close_socket(){
 }
 
 
-int eth_write_socket(eth_frame_t *eth, uint8_t *datos, uint32_t cantidad){
-
-	uint16_t aux_u16;
-	if( cantidad > 1438 ){	// no maneja fragmentación 
-		return(-1);
-	}
-	aux_u16 = (uint16_t) cantidad;
-	eth_retorno_paquete(eth, ( ETH_PUSH | ETH_ACK ), datos, aux_u16 );//retorno syn-ack
-
-	return(0);
-}

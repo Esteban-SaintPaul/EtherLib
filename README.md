@@ -10,18 +10,18 @@ Para solucionar la adaptación a red, compré un adaptador de nombre enc28j60, e
 Objetivo:
 
 Como objetivo general propongo que la librería en su versión 1.0 pueda manejar protocolos ARP, ICMP y TCP todos estos entrantes con archivos de transferencia sin fragmentar.
-Lo que especifico en la primera línea es que intento que sea funcional primero, porque entrar en la fragmentación para enviar y recibir archivos mas grandes supone algo mas de tiempo y creo que implementar primero una librería básica es mejor para aprender. También con la palabra entrante, limito la aplicación a que funcione inicialmente como servidor, que habilite los puertos y permita conexiones entrantes, logicamnete que también se conecte mediante TCP para enviar archivos pero que no sea quien tire la primera piedra...
+Lo que especifico en la primera línea es que intento que sea funcional primero, porque entrar en la fragmentación para enviar y recibir archivos mas grandes supone algo mas de tiempo y creo que implementar primero una librería básica es mejor para aprender. También con la palabra entrante, limito la aplicación a que funcione inicialmente como servidor, que habilite los puertos y permita conexiones entrantes, lógicamnete que también se conecte mediante TCP para enviar archivos pero que no sea quien tire la primera piedra...
 Dejaremos esa puerta abierta para la versión 2
 
 Avences:
 
 Esta es la versión 1.0
-Hasta hoy implementé el del protocolo ARP lo básico para que responda con la IP asignada a la placa, por lo que en una red ethernet contestará este tipo de mensaje.
+Hasta hoy implementé del protocolo ARP lo básico para que responda con la IP asignada a la placa, por lo que en una red ethernet contestará este tipo de mensajes.
 Como segundo paso implementé también el servicio ICMP para que conteste los paquetes eco, de esta manera al conectar el conjunto placa base-enc28j60 con un cable de red a una PC nos retornará el famoso PING.
 El sistema realiza la conexión en tres pasos llamada "three way handshake" de TCP y envía solicitudes GET.
 Si intentamos ver la página web "http://10.0.0.31/index.html" nos retorna una página sencilla, cualquier otra url nos traerá el error 404.
-Pruebo tambien el uso de otro puerto iniciando un servidor web wn el 517,porlo que colocando http://10.0.0.31:517/nfs nos traerá otra página web o error 404.
-con esto son permitirá crar por ejemplo un servido ftp sin interferir con el web.
+Pruebo tambien el uso de otro puerto iniciando un servidor web en el 517, por lo que colocando "http://10.0.0.31:517/nfs" nos traerá otra página web o error 404.
+con esto nos permitirá cerar, por ejemplo, un servidor ftp sin interferir con el web.
 
 
 Inicio:
@@ -42,6 +42,6 @@ SPI1 NSS  PA04 -> ENC28J60(CS)
 
  - Software
 
-Como sistema operativo utilizo Debian GNU/Linux 8. Dado que se me rompió el dísco rígido y no pude recuperar nada, instalé esta versión de cero, y la sorpersa mas grande es que el compilador, GNU para ARM GCC está disponible desde los repositorios como gcc-arm-none-eabi.
+Como sistema operativo utilizo Debian GNU/Linux 8. Dado que se me rompió el disco rígido y no pude recuperar nada, instalé esta versión de cero, y la sorpersa mas grande es que el compilador, GNU para ARM GCC está disponible desde los repositorios como gcc-arm-none-eabi.
 Tambien necesario es el software de Texane st-link, este se utiliza para grabar el programa en nuestra placa ST y el st-util que es un servidor para realizar depuración desde el gdb-arm-none-eabi en el puerto 4242.
 
