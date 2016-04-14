@@ -48,6 +48,8 @@ ROOT=$(shell pwd)
 CFLAGS += -Iinc
 CFLAGS += -Ilib -Ilib/inc -Ilib/inc/core 
 CFLAGS += -Ilibeth/inc
+CFLAGS += -Iramdisk/inc
+CFLAGS += -Ilitefs/inc
 
 SRCS += lib/startup_stm32f4xx.s # add startup file to build
 
@@ -55,9 +57,9 @@ OBJS = $(SRCS:.c=.o)
 
 ###################################################
 
-.PHONY: lib libeth proj
+.PHONY: lib libeth ramdisk proj
 
-all: lib libeth proj
+all: lib libeth ramdisk proj
 	$(SIZE) $(OUTPATH)/$(PROJ_NAME).elf
 
 lib:
@@ -66,10 +68,13 @@ lib:
 libeth:
 	$(MAKE) -C libeth FLOAT_TYPE=$(FLOAT_TYPE)
 
+ramdisk:
+	$(MAKE) -C ramdisk FLOAT_TYPE=$(FLOAT_TYPE)
+
 proj: 	$(OUTPATH)/$(PROJ_NAME).elf
 
 $(OUTPATH)/$(PROJ_NAME).elf: $(SRCS)
-	$(CC) $(CFLAGS) $^ -o $@ -Llib -Llibeth -leth -lstm32f4
+	$(CC) $(CFLAGS) $^ -o $@ -Llib -Llibeth -Lramdisk -leth -lstm32f4 -lramdisk
 	$(OBJCOPY) -O ihex $(OUTPATH)/$(PROJ_NAME).elf $(OUTPATH)/$(PROJ_NAME).hex
 	$(OBJCOPY) -O binary $(OUTPATH)/$(PROJ_NAME).elf $(OUTPATH)/$(PROJ_NAME).bin
 
@@ -79,6 +84,7 @@ clean:
 	rm -f $(OUTPATH)/$(PROJ_NAME).bin
 	$(MAKE) clean -C lib
 	$(MAKE) clean -C libeth
+	$(MAKE) clean -C ramdisk
 
 write:
 	st-flash --reset write $(OUTPATH)/$(PROJ_NAME).bin 0x8000000

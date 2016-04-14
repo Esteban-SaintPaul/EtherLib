@@ -2,10 +2,10 @@
 Introducción:
 
 Con el espíritu de adquirir conocimientos sobre la llamada "pila TCP/IP" se me ocurrió la idea de investigar, pero ir creando mientras obtenía información, lo que es el sistema de intercambio de paquetes entre computadoreas.
-Dado que el realizar un sistema operatvo completo no me fué posible, solo logré que corrieran procesos en paralelo con un microkernel que cree hace algún tiempo, me dispuse a crear solo una librería que con llamadas sencillas que pudiera dotar a alguna placa con procesador ARM, de conectividad IP.
+Dado que el realizar un sistema operatvo completo no me fué posible, solo logré que corrieran procesos en paralelo con un microkernel que cree hace algún tiempo, me dispuse a crear solo una librería, con llamadas sencillas, que pudiera dotar a alguna placa con procesador ARM, de conectividad IP.
 Lo primero fué adoptar una placa base para el proyecto, lo que luego de investigar un poco y con el consejo de Water Adad (un amigazo), compré una placa de nobre stm32f4discovery. Esta no cuenta con adaptador de red, pero en su interior tiene un potente procesador de 32 bits que puede correr hasta 168 Mhz (stm32f407vg), puertos digitales de entrada y salida, I2C, USART, conversores analógicos a digital y PWM.
 Una gran incorporación a esta placa es el circuito integrado stlink/2 que nos permite grabar nuestro programa en su interior, como así tambien realizar depuración en linea.
-Para solucionar la adaptación a red, compré un adaptador de nombre enc28j60, este es el mas económico que pude ver, pero con una contra, no encontre facilmente un código para su manejo, hasta que di con la web de Patrick Leyman (http://patrickleyman.be/blog/). Allí es donde encontré el código que permitía manejar correctamente el adaptador. Además el implemetó un bosquejo de lo que sería el manejo de la pila TCP/IP, pero como lo que quiero es entender a fondo el funcionamiento de la pila, eliminé este código así quedaba lo mas limpio y liviano posible.
+Para solucionar la adaptación a red, compré un adaptador de nombre enc28j60, este es el mas económico que pude encontrar, pero con una contra, no encontre facilmente un código para su manejo, hasta que di con la web de Patrick Leyman (http://patrickleyman.be/blog/). Allí es donde encontré el código que permitía manejar correctamente el adaptador. Además el implemetó un bosquejo de lo que sería el manejo de la pila TCP/IP, pero como lo que quiero es entender a fondo el funcionamiento de la pila, eliminé este código así quedaba lo mas limpio y liviano posible.
 
 Objetivo:
 
@@ -21,7 +21,7 @@ Como segundo paso implementé también el servicio ICMP para que conteste los pa
 El sistema realiza la conexión en tres pasos llamada "three way handshake" de TCP y envía solicitudes GET.
 Si intentamos ver la página web "http://10.0.0.31/index.html" nos retorna una página sencilla, cualquier otra url nos traerá el error 404.
 Pruebo tambien el uso de otro puerto iniciando un servidor web en el 517, por lo que colocando "http://10.0.0.31:517/nfs" nos traerá otra página web o error 404.
-con esto nos permitirá cerar, por ejemplo, un servidor ftp sin interferir con el web.
+con esto nos permitirá crear, por ejemplo, un servidor ftp sin interferir con el web.
 
 
 Inicio:
@@ -43,5 +43,5 @@ SPI1 NSS  PA04 -> ENC28J60(CS)
  - Software
 
 Como sistema operativo utilizo Debian GNU/Linux 8. Dado que se me rompió el disco rígido y no pude recuperar nada, instalé esta versión de cero, y la sorpersa mas grande es que el compilador, GNU para ARM GCC está disponible desde los repositorios como gcc-arm-none-eabi.
-Tambien necesario es el software de Texane st-link, este se utiliza para grabar el programa en nuestra placa ST y el st-util que es un servidor para realizar depuración desde el gdb-arm-none-eabi en el puerto 4242.
+Tambien necesario es el software de Texane st-link, este se utiliza para grabar el programa en nuestra placa ST y el st-util que es un servidor para realizar depuración desde el gdb-arm-none-eabi-gdb en el puerto 4242.
 

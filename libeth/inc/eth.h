@@ -20,3 +20,14 @@ int eth_set_gw(uint8_t a, uint8_t b, uint8_t c, uint8_t d);
 int eth_set_mask(uint8_t a, uint8_t b, uint8_t c, uint8_t d);
 int eth_set_mac(uint8_t a, uint8_t b, uint8_t c, uint8_t d, uint8_t e, uint8_t f);
 int eth_set_puerto(uint32_t (*a)(eth_frame_t*) , uint16_t puerto);
+uint16_t tcp_checksum_data(uint8_t *data_p, uint32_t size_dat);
+/*
+	eth_in :	estructura delpaquete leido
+	buffer:		datos a enviar
+	size_buffer:	tamaño en bytes de los datos a enviar
+	num_frag:	número de fragmento
+	cant_frag:	cantidad de fragmentos
+	check_data:	checksum tcp si es el paquete cero
+	size_arch:	tamaño del archivo completo sin fragmentar
+*/
+int eth_write_data(eth_frame_t *eth_in, uint8_t *buffer, uint16_t size_buffer, uint16_t num_frag, uint16_t cant_frag, uint32_t check_data, uint32_t size_arch);
